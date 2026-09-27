@@ -6,13 +6,17 @@
 #' @param fig_width figure width in inch
 #' @param fig_height figure height in inch
 #' @param t_lpp An integer specifying the table lines per page \cr
-#'    Specify this optional argument to modify the length of all of the table displays
+#'    Specify this optional argument to modify the length of all of the table displays.
+#'    Overridden for an individual slide by an \code{lpp} field on its spec entry.
 #' @param t_cpp An integer specifying the table columns per page\cr
-#'    Specify this optional argument to modify the width of all of the table displays
+#'    Specify this optional argument to modify the width of all of the table displays.
+#'    Overridden for an individual slide by a \code{cpp} field on its spec entry.
 #' @param l_lpp An integer specifying the listing lines per page\cr
-#'    Specify this optional argument to modify the length of all of the listings display
+#'    Specify this optional argument to modify the length of all of the listings display.
+#'    Overridden for an individual slide by an \code{lpp} field on its spec entry.
 #' @param l_cpp An integer specifying the listing columns per page\cr
-#'    Specify this optional argument to modify the width of all of the listings display
+#'    Specify this optional argument to modify the width of all of the listings display.
+#'    Overridden for an individual slide by a \code{cpp} field on its spec entry.
 #' @param fig_editable whether we want the figure to be editable in pptx viewers, defaults to FALSE
 #' @param font_size Deck-wide default table font sizes, a named `list` with any
 #'   of `body`, `header`, `footer` (point sizes). Per-slide sizes declared in the
@@ -39,6 +43,27 @@
 #'     footer: 5
 #' }
 #' The `font_size` argument sets deck-wide defaults; per-slide values win.
+#'
+#' \subsection{Per-slide pagination}{
+#' Pagination density is resolved the same way. A spec entry may carry an
+#' optional \code{lpp} (lines per page) and \code{cpp} (columns per page). When
+#' present they override the deck-wide \code{t_lpp}/\code{t_cpp} (tables) or
+#' \code{l_lpp}/\code{l_cpp} (listings) for that slide only, so a short
+#' demographics table and a long adverse-event table can use different
+#' densities in the same deck:
+#' \preformatted{
+#' t_dm_slide_FAS:
+#'   program: t_dm_slide
+#'   suffix: FAS
+#'   lpp: 30
+#'   cpp: 180
+#' }
+#' Entries without these fields keep the deck-wide value. Each must be a single
+#' positive whole number; anything else is an error naming the offending entry.
+#'
+#' Note that pagination for \code{gtsummary} tables is recomputed from the
+#' slide height, so a spec \code{lpp} does not change their pagination.
+#' }
 #' @export
 #' @examplesIf require(filters)
 #'
@@ -140,6 +165,17 @@ generate_slides <- function(outputs,
     sp <- attr(x, "spec")
     modifyList(deck_fs, (sp$font_size) %||% list())
   }
+  # Effective pagination for a slide: the spec entry's `lpp`/`cpp` when set,
+  # otherwise the deck-wide argument. Like the font sizes above, the slide wins.
+  # Only spec-supplied values are validated: the arguments keep whatever
+  # behaviour they had before, so existing callers are unaffected.
+  slide_pag <- function(x, lpp, cpp) {
+    sp <- attr(x, "spec")
+    list(
+      lpp = if (is.null(sp$lpp)) lpp else assert_is_valid_pagination(sp$lpp, "lpp", sp$output),
+      cpp = if (is.null(sp$cpp)) cpp else assert_is_valid_pagination(sp$cpp, "cpp", sp$output)
+    )
+  }
   # Effective formatter for a slide: its spec `table_format` (else the deck-wide
   # one, else `default_fmt`), wrapped so the resolved font sizes are applied.
   resolve_format <- function(x, default_fmt) {
@@ -174,7 +210,8 @@ generate_slides <- function(outputs,
     if (inherits(x, "dVTableTree") || inherits(x, "VTableTree")) {
       tf <- resolve_format(x, orange_format)
       footer_pt <- slide_fs(x)$footer
-      y <- call_ft(x, list(lpp = t_lpp, cpp = t_cpp, table_format = tf))
+      pag <- slide_pag(x, t_lpp, t_cpp)
+      y <- call_ft(x, list(lpp = pag$lpp, cpp = pag$cpp, table_format = tf))
       usernotes <- x@usernotes
       for (tt in y) {
         call_slide(tt, list(
@@ -183,7 +220,8 @@ generate_slides <- function(outputs,
         ))
       }
     } else if (inherits(x, "dlisting")) {
-      y <- call_ft(x, list(cpp = l_cpp, lpp = l_lpp))
+      pag <- slide_pag(x, l_lpp, l_cpp)
+      y <- call_ft(x, list(cpp = pag$cpp, lpp = pag$lpp))
       for (tt in y) {
         call_slide(tt, list(
           table_loc = center_table_loc(tt$ft, ppt_width = width, ppt_height = height)
@@ -196,8 +234,12 @@ generate_slides <- function(outputs,
     } else if (inherits(x, "dgtsummary")) {
       tf <- resolve_format(x, autoslider_format)
       footer_pt <- slide_fs(x)$footer
+      # The value is supplied here; `to_flextable.dgtsummary()` currently
+      # recomputes `lpp` from `ppt_height`, so it only takes effect once #121
+      # (gtsummary ignores t_lpp) is fixed.
+      pag <- slide_pag(x, t_lpp, t_cpp)
       y <- call_ft(x, list(
-        lpp = t_lpp, ppt_height = height, ppt_width = width, table_format = tf
+        lpp = pag$lpp, ppt_height = height, ppt_width = width, table_format = tf
       ))
       for (tt in y) {
         call_slide(tt, list(

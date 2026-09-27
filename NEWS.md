@@ -1,5 +1,12 @@
 # autoslider.core 0.3.3.9008
 
+ * Per-slide pagination: a spec entry may now carry an optional `lpp:` (lines per
+   page) and `cpp:` (columns per page), overriding the deck-wide `t_lpp`/`t_cpp`
+   (tables) and `l_lpp`/`l_cpp` (listings) arguments of `generate_slides()` for
+   that slide only, so a short table and a long one can use different densities
+   in the same deck. Entries without the fields are unchanged. Note that the
+   gtsummary path still recomputes `lpp` from the slide height (#121), so a spec
+   `lpp` does not yet affect it (#126).
  * Added `add_ai_story()` (and an `add_ai_story` MCP tool): a post-processing step
    that reads a generated `.pptx`, asks an LLM to tell the story of the tables, and
    inserts real content slides -- a summary section at the front and a conclusions
