@@ -22,9 +22,15 @@ make_footnote_value <- function(value, font_size = NULL) {
 #' @param fig_width figure width in inch
 #' @param fig_height figure height in inch
 #' @param t_lpp An integer specifying the table lines per page \cr
-#'    Specify this optional argument to modify the length of all of the table displays
+#'    Specify this optional argument to modify the length of all of the table displays.
+#'    Defaults to `NULL`, which auto-fits the table to the slide height (for rtables,
+#'    via [rtables::paginate_table()]; for gtsummary, via a row-height estimate).
 #' @param t_cpp An integer specifying the table columns per page\cr
-#'    Specify this optional argument to modify the width of all of the table displays
+#'    Specify this optional argument to modify the width of all of the table displays.
+#'    Only honored for rtables output; gtsummary tables do not support column
+#'    pagination and are instead scaled down to fit when too wide. Explicitly
+#'    setting `t_cpp` also raises a warning for gtsummary tables that need scaling,
+#'    since column pagination was requested but cannot be applied.
 #' @param l_lpp An integer specifying the listing lines per page\cr
 #'    Specify this optional argument to modify the length of all of the listings display
 #' @param l_cpp An integer specifying the listing columns per page\cr
@@ -91,9 +97,14 @@ make_footnote_value <- function(value, font_size = NULL) {
 generate_slides <- function(outputs,
                             outfile = paste0(tempdir(), "/output.pptx"),
                             template = file.path(system.file(package = "autoslider.core"), "theme/basic.pptx"),
-                            fig_width = 9, fig_height = 5, t_lpp = 20, t_cpp = 200,
+                            fig_width = 9, fig_height = 5, t_lpp = NULL, t_cpp = 200,
                             l_lpp = 20, l_cpp = 150, fig_editable = FALSE,
                             font_size = NULL, ...) {
+  # gtsummary tables don't support column pagination; only warn about a too-wide
+  # table when the caller explicitly asked for column pagination via `t_cpp`,
+  # not for the default value (which is otherwise always forwarded).
+  t_cpp_explicit <- !missing(t_cpp)
+
   if (any(c(
     inherits(outputs, "VTableTree"),
     inherits(outputs, "listing_df")
@@ -228,7 +239,8 @@ generate_slides <- function(outputs,
       tf <- resolve_format(x, autoslider_format)
       footer_pt <- resolve_footer_font_size(x)
       y <- call_ft(x, list(
-        lpp = t_lpp, ppt_height = height, ppt_width = width, table_format = tf
+        lpp = t_lpp, cpp = if (t_cpp_explicit) t_cpp else NULL,
+        ppt_height = height, ppt_width = width, table_format = tf
       ))
       for (tt in y) {
         call_slide(tt, list(
