@@ -31,9 +31,14 @@ with_spec <- function(output, spec) {
 # splitting (8/10/12/14 all error on the table). Raising `lpp` can never hit
 # that floor, so one constant is safe for every fixture.
 #
-# Measured on these fixtures: table 4 pages at the default lpp 20 -> 1 at 60;
-# listing 5 pages at the default 20 -> 1 at 60.
+# The deck-wide `t_lpp` now defaults to NULL (auto-fit to the slide height),
+# which for these small fixtures also lands on a single page -- so the tests use
+# an explicit `t_lpp`/`l_lpp` baseline (`base_lpp`) to get a multi-page deck to
+# compare the per-slide override against.
+# Measured on these fixtures: table 4 pages at lpp 20 -> 1 at 60;
+# listing 5 pages at lpp 20 -> 1 at 60.
 wide_lpp <- 60
+base_lpp <- 20
 
 # `cpp` is the opposite: widening it changes nothing (the table already fits at
 # the default 200; 120/200/400 all give 4 pages), so it has to be narrowed to be
@@ -54,8 +59,8 @@ test_that("a spec `lpp` changes the pagination of that table", {
   skip_if_not_installed("filters")
 
   expect_lt(
-    n_slides(list(with_spec(demog, list(lpp = wide_lpp)))),
-    n_slides(list(demog))
+    n_slides(list(with_spec(demog, list(lpp = wide_lpp))), t_lpp = base_lpp),
+    n_slides(list(demog), t_lpp = base_lpp)
   )
 })
 
@@ -65,22 +70,28 @@ test_that("a spec `lpp` applies to its own slide only, not the whole deck", {
   # One deck, two outputs, only the first carries `lpp`. The total must be
   # exactly what each output contributes on its own -- proving the field
   # reached output A and did not leak into output B.
-  a_wide <- n_slides(list(with_spec(demog, list(lpp = wide_lpp))))
-  b_default <- n_slides(list(demog))
+  a_wide <- n_slides(list(with_spec(demog, list(lpp = wide_lpp))), t_lpp = base_lpp)
+  b_default <- n_slides(list(demog), t_lpp = base_lpp)
 
-  both <- n_slides(list(with_spec(demog, list(lpp = wide_lpp)), demog))
+  both <- n_slides(list(with_spec(demog, list(lpp = wide_lpp)), demog), t_lpp = base_lpp)
 
   expect_equal(both, a_wide + b_default)
   expect_lt(both, 2 * b_default) # B kept the deck default, A did not
 })
 
-test_that("an output without a spec `lpp` is unaffected by the change", {
+test_that("an output without a spec `lpp` follows the deck-wide argument", {
   skip_if_not_installed("filters")
 
-  # No spec at all must behave exactly like passing the documented default.
+  # No `lpp` in the spec must track the deck-wide `t_lpp`: a bare output and one
+  # with an empty spec paginate identically at the same `t_lpp`, and both differ
+  # from the auto-fit default -- proving the field, when absent, changes nothing.
+  expect_equal(
+    n_slides(list(demog), t_lpp = base_lpp),
+    n_slides(list(with_spec(demog, list())), t_lpp = base_lpp)
+  )
   expect_equal(
     n_slides(list(demog)),
-    n_slides(list(demog), t_lpp = 20)
+    n_slides(list(demog), t_lpp = NULL)
   )
 })
 
@@ -216,8 +227,10 @@ test_that("`lpp` set in a yaml spec flows through the whole pipeline", {
   expect_equal(attr(outputs[[1]], "spec")$lpp, wide_lpp)
   expect_null(attr(outputs[[2]], "spec")$lpp)
 
-  # The entry with `lpp` needs fewer slides than the one without.
-  n_both <- n_slides(outputs)
-  n_default_only <- n_slides(outputs[2])
+  # The entry with `lpp` needs fewer slides than the one without. Compare at an
+  # explicit deck `t_lpp` so the default (`NULL`, auto-fit) does not collapse the
+  # `lpp`-free entry onto a single page.
+  n_both <- n_slides(outputs, t_lpp = base_lpp)
+  n_default_only <- n_slides(outputs[2], t_lpp = base_lpp)
   expect_lt(n_both - n_default_only, n_default_only)
 })

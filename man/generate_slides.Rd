@@ -10,7 +10,7 @@ generate_slides(
   template = file.path(system.file(package = "autoslider.core"), "theme/basic.pptx"),
   fig_width = 9,
   fig_height = 5,
-  t_lpp = 20,
+  t_lpp = NULL,
   t_cpp = 200,
   l_lpp = 20,
   l_cpp = 150,
@@ -32,10 +32,16 @@ generate_slides(
 
 \item{t_lpp}{An integer specifying the table lines per page \cr
 Specify this optional argument to modify the length of all of the table displays.
+Defaults to `NULL`, which auto-fits the table to the slide height (for rtables,
+via [rtables::paginate_table()]; for gtsummary, via a row-height estimate).
 Overridden for an individual slide by an \code{lpp} field on its spec entry.}
 
 \item{t_cpp}{An integer specifying the table columns per page\cr
 Specify this optional argument to modify the width of all of the table displays.
+Only honored for rtables output; gtsummary tables do not support column
+pagination and are instead scaled down to fit when too wide. Explicitly
+setting `t_cpp` also raises a warning for gtsummary tables that need scaling,
+since column pagination was requested but cannot be applied.
 Overridden for an individual slide by a \code{cpp} field on its spec entry.}
 
 \item{l_lpp}{An integer specifying the listing lines per page\cr
@@ -51,7 +57,8 @@ Overridden for an individual slide by a \code{cpp} field on its spec entry.}
 \item{font_size}{Deck-wide default table font sizes, a named `list` with any
 of `body`, `header`, `footer` (point sizes). Per-slide sizes declared in the
 spec (a `font_size:` block on the entry) override these. Applied by wrapping
-the slide's `table_format` via [with_font_sizes()]; see Details.}
+the slide's `table_format` via [with_font_sizes()]. The footer defaults to
+the body size, or 8 pt when no body size is supplied; see Details.}
 
 \item{...}{arguments passed to program}
 }
@@ -80,6 +87,9 @@ t_dm_slide_FAS:
     footer: 5
 }
 The `font_size` argument sets deck-wide defaults; per-slide values win.
+When no footer size is supplied, the resolved body size is used, falling back
+to 8 pt. This default is applied to the Confidential footnote on every
+supported slide path, including `decor = FALSE`.
 
 \subsection{Per-slide pagination}{
 Pagination density is resolved the same way. A spec entry may carry an
